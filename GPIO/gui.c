@@ -5,11 +5,12 @@
 #include <unistd.h>
 
 int main (void) {
-    WINDOW *mainwin, *gpiowin;
+    WINDOW *mainwin;// *gpiowin;
     int ch;
     int row;
     int col;
     int szx,szy;
+    int i;
     //char buf[32];
     char buf[15];
     /*
@@ -37,10 +38,11 @@ int main (void) {
     fprintf(stderr, "Error initializing ncurses.\n");
     exit(EXIT_FAILURE);
     }
-    getmaxyx(stdscr, row, col);
+    //getmaxyx(stdscr, sizew, sizeh);
     getmaxyx(stdscr, szy, szx);
+    getmaxyx(stdscr, row, col);
     snprintf(buf, sizeof(buf), "r = %d, c = %d\n", szy, szx);
-    int width = (col) / 4 - 2, height = (row) / 2 - 2;
+    //int width = (col) / 4 - 2, height = (row) / 2 - 2;
     int sizew = (col) / 4, sizeh = (row) / 2;
     //int rows = (row) / 2 - 2, cols = (col) / 4 - 2;
     //int x = (width);
@@ -51,18 +53,21 @@ int main (void) {
     noecho();
     keypad(mainwin, TRUE);
 
+    //sizew=10;
+
     gpiowinlist[0] = subwin(mainwin, sizeh, sizew, y, x);
     box(mainwin, '+','+');
     box(gpiowinlist[0], 0, 0);
     mvwaddstr(gpiowinlist[0], 1, 4, "lololololol");
     mvwaddstr(gpiowinlist[0], (sizeh) / 2, (sizew) / 2, buf);
     //mvwaddstr(gpiowinlist[0], (height) / 2, (width) / 2, buf);
-    //for gpiowinlist[i], i=1, i++:
-    //    gpiowinlist[i] = subwin(mainwin, sizeh, , y , x + sizew);
-    //    box(gpiowinlist[i], 0, 0);
-    //    mvwaddstr(gpiowinlist[i], 
-    //    if i>=4:
-    //         
+    for (i = 1; i++; i < 5) {
+        gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y, x + sizew*2);
+        box(gpiowinlist[i], 0, 0);
+        //mvwaddstr(gpiowinlist[i], 1, 4, "lololololol");
+        refresh();
+    }
+
     //mvwaddstr(gpiowin, 1, 4, "Move the window");
     //mvwaddstr(gpiowin, 2, 2, "with the arrow keys");
     //mvwaddstr(gpiowin, 3, 6, "or HOME/END");
@@ -79,10 +84,11 @@ int main (void) {
             break;
         case KEY_LEFT:
             break;
-        break;
+        //break;
         }
     }
     delwin(gpiowinlist[0]);
+    delwin(gpiowinlist[1]);
     delwin(mainwin);
     endwin();
     refresh();
