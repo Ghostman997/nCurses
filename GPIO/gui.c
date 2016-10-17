@@ -33,7 +33,7 @@ int main (void) {
     noecho();
     keypad(mainwin, TRUE);
 
-    gpiowinlist[0] = subwin(mainwin, sizeh, sizew, y, x);
+   /* gpiowinlist[0] = subwin(mainwin, sizeh, sizew, y, x);
     gpiowinlist[1] = subwin(mainwin, sizeh, sizew, y, x + sizew);
     gpiowinlist[2] = subwin(mainwin, sizeh, sizew, y, x + sizew*2);
     gpiowinlist[3] = subwin(mainwin, sizeh, sizew, y, x + sizew*3);
@@ -41,8 +41,9 @@ int main (void) {
     gpiowinlist[5] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew);
     gpiowinlist[6] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*2);
     gpiowinlist[7] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*3);
+    */
     box(mainwin, '+','+');
-    box(gpiowinlist[0], 0, 0);
+    /*box(gpiowinlist[0], 0, 0);
     box(gpiowinlist[1], 0, 0);
     box(gpiowinlist[2], 0, 0);
     box(gpiowinlist[3], 0, 0);
@@ -52,15 +53,21 @@ int main (void) {
     box(gpiowinlist[7], 0, 0);
     mvwaddstr(gpiowinlist[0], 1, 4, "lololololol");
     mvwaddstr(gpiowinlist[0], (sizeh) / 2, (sizew) / 2, buf);
+    */
     //mvwaddstr(gpiowinlist[0], (height) / 2, (width) / 2, buf);
-    /*for (i = 1; i++; i <= 3) {
-        gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y, x + sizew); //- sizew);//*(i+1)-1);
+    for (i = 0; i++; i <= 7) {
+        gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y, x + (sizew*i)); //- sizew);//*(i+1)-1);
         box(gpiowinlist[i], 0, 0);
+        if (i >= 4) {
+            gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew);
+            box(gpiowinlist[i], 0, 0);
+        }
+        //box(gpiowinlist[i], 0, 0);
         snprintf(buf, sizeof(buf), "%d", i);
         mvwaddstr(gpiowinlist[i], sizeh / 2, sizew / 2, buf);
         mvwaddstr(gpiowinlist[i], 1, 4, "lololololol");
-        refresh();
-    }*/
+        //refresh();
+    }
 
     refresh();
 
