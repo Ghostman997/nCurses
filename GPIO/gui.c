@@ -42,7 +42,7 @@ int main (void) {
     gpiowinlist[6] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*2);
     gpiowinlist[7] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*3);
     */
-    box(mainwin, '+','+');
+    box(mainwin, '|','-');
     /*box(gpiowinlist[0], 0, 0);
     box(gpiowinlist[1], 0, 0);
     box(gpiowinlist[2], 0, 0);
@@ -55,11 +55,11 @@ int main (void) {
     mvwaddstr(gpiowinlist[0], (sizeh) / 2, (sizew) / 2, buf);
     */
     //mvwaddstr(gpiowinlist[0], (height) / 2, (width) / 2, buf);
-    for (i = 0; i++; i <= 7) {
-        gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y, x + (sizew*i)); //- sizew);//*(i+1)-1);
+    for (i = 0; i < 8; i++) {
+        gpiowinlist[i] = subwin(mainwin, sizeh - 1, sizew, y, x + (sizew*i)); //- sizew);//*(i+1)-1);
         box(gpiowinlist[i], 0, 0);
         if (i >= 4) {
-            gpiowinlist[i] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew);
+            gpiowinlist[i] = subwin(mainwin, sizeh - 1, sizew, y + sizeh, x + sizew*(i-4));
             box(gpiowinlist[i], 0, 0);
         }
         //box(gpiowinlist[i], 0, 0);
