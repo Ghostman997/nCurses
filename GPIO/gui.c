@@ -1,8 +1,109 @@
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <curses.h>
 #include <unistd.h>
+
+// defines to make life easier
+#define COLOR_ACTIVE COLOR_PAIR(1)
+#define COLOR_INACTIVE COLOR_PAIR(14)
+#define LIST_MAX 8
+#define GPIO_LOW 0
+#define GPIO_HIGH 1
+
+// code stolen from http://elinux.org/RPi_GPIO_Code_Sample#sysfs
+#define VALUE_MAX 30
+#define BUFFER_MAX 3
+#define DIRECTION_MAX 35
+#define IN  0
+#define OUT 1
+
+static int GPIOExport(int pin) {
+    char buffer[BUFFER_MAX];
+    ssize_t bytes_written;
+    int fd;
+    fd = open("/sys/class/gpio/export", O_WRONLY);
+    if (-1 == fd) {
+        fprintf(stderr, "Failed to open export for writing!\n");
+        return(-1);
+    }
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    write(fd, buffer, bytes_written);
+    close(fd);
+    return(0);
+}
+
+static int GPIOUnexport(int pin) {
+    char buffer[BUFFER_MAX];
+    ssize_t bytes_written;
+    int fd;
+    fd = open("/sys/class/gpio/unexport", O_WRONLY);
+    if (-1 == fd) {
+        fprintf(stderr, "Failed to open unexport for writing!\n");
+        return(-1);
+    }
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    write(fd, buffer, bytes_written);
+    close(fd);
+    return(0);
+}
+
+static int GPIODirection(int pin, int dir) {
+    static const char s_directions_str[]  = "in\0out";
+    char path[DIRECTION_MAX];
+    int fd;
+    snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction", pin);
+    fd = open(path, O_WRONLY);
+    if (-1 == fd) {
+        fprintf(stderr, "Failed to open gpio direction for writing!\n");
+        return(-1);
+    }
+    if (-1 == write(fd, &s_directions_str[IN == dir ? 0 : 3], IN == dir ? 2 : 3)) {
+        fprintf(stderr, "Failed to set direction!\n");
+        return(-1);
+    }
+    close(fd);
+    return(0);
+}
+
+static int GPIORead(int pin) {
+    char path[VALUE_MAX];
+    char value_str[3];
+    int fd;
+    snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin);
+    fd = open(path, O_RDONLY);
+    if (-1 == fd) {
+        fprintf(stderr, "Failed to open gpio value for reading!\n");
+        return(-1);
+    }
+    if (-1 == read(fd, value_str, 3)) {
+        fprintf(stderr, "Failed to read value!\n");
+        return(-1);
+    }
+    close(fd);
+    return(atoi(value_str));
+}
+
+static int GPIOWrite(int pin, int value) {
+    static const char s_values_str[] = "01";
+    char path[VALUE_MAX];
+    int fd;
+    snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin);
+    fd = open(path, O_WRONLY);
+    if (-1 == fd) {
+        fprintf(stderr, "Failed to open gpio value for writing!\n");
+        return(-1);
+    }
+    if (1 != write(fd, &s_values_str[GPIO_LOW == value ? 0 : 1], 1)) {
+        fprintf(stderr, "Failed to write value!\n");
+        return(-1);
+    }
+    close(fd);
+    return(0);
+}
 
 int main (void) {
     WINDOW *mainwin;// *gpiowin;
@@ -12,8 +113,9 @@ int main (void) {
     int szx,szy;
     int v, h;
     int i;
+    int gpiostate[LIST_MAX];
     char buf[15];
-    WINDOW *gpiowinlist[8];
+    WINDOW *gpiowinlist[LIST_MAX];
 
     if ( (mainwin = initscr()) == NULL) {
         fprintf(stderr, "Error initializing ncurses.\n");
@@ -56,29 +158,9 @@ int main (void) {
     //noecho();
     keypad(mainwin, TRUE);
 
-   /* gpiowinlist[0] = subwin(mainwin, sizeh, sizew, y, x);
-    gpiowinlist[1] = subwin(mainwin, sizeh, sizew, y, x + sizew);
-    gpiowinlist[2] = subwin(mainwin, sizeh, sizew, y, x + sizew*2);
-    gpiowinlist[3] = subwin(mainwin, sizeh, sizew, y, x + sizew*3);
-    gpiowinlist[4] = subwin(mainwin, sizeh, sizew, y + sizeh, x);
-    gpiowinlist[5] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew);
-    gpiowinlist[6] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*2);
-    gpiowinlist[7] = subwin(mainwin, sizeh, sizew, y + sizeh, x + sizew*3);
-    */
     box(mainwin, '|','-');
-    /*box(gpiowinlist[0], 0, 0);
-    box(gpiowinlist[1], 0, 0);
-    box(gpiowinlist[2], 0, 0);
-    box(gpiowinlist[3], 0, 0);
-    box(gpiowinlist[4], 0, 0);
-    box(gpiowinlist[5], 0, 0);
-    box(gpiowinlist[6], 0, 0);
-    box(gpiowinlist[7], 0, 0);
-    mvwaddstr(gpiowinlist[0], 1, 4, "lololololol");
-    mvwaddstr(gpiowinlist[0], (sizeh) / 2, (sizew) / 2, buf);
-    */
     //mvwaddstr(gpiowinlist[0], (height) / 2, (width) / 2, buf);
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < LIST_MAX; i++) {
         gpiowinlist[i] = subwin(mainwin, sizeh - 1, sizew, y, x + (sizew*i)); //- sizew);//*(i+1)-1);
         //box(gpiowinlist[i], '-', '|');
         wborder(gpiowinlist[i], 176, 176, 176, 176, 176, 176, 176, 176);
@@ -94,45 +176,58 @@ int main (void) {
         //refresh();
     }
 
+    // loop through all windows, set GPIO state to low, print display
+    for (i = 0; i < LIST_MAX; i++) {
+        gpiostate[i] = GPIO_LOW;
+        mvwaddstr(gpiowinlist[i], 3, 3, "OFF");
+        GPIOExport(i); // create a /sys/class/gpio/gpioX entry
+        GPIODirection(i, OUT); // set pin to output
+        GPIOWrite(i, GPIO_LOW); // set to '0' output
+    }
+
     refresh();
 
     i = 0;
-    wbkgd(gpiowinlist[i], COLOR_PAIR(8));
+    // wbkgd(gpiowinlist[i], COLOR_PAIR(8));
+    // color pair to match "active"
+    wbkgd(gpiowinlist[i], COLOR_ACTIVE);
     wrefresh(gpiowinlist[i]);
     while ( (ch = getch()) != 'q' ) {
+        // testing "enter"
+        //fprintf(stdout, "%d\r\n", ch);
         switch (ch) {
             case 'a':
             case KEY_RIGHT:
-                wbkgd(gpiowinlist[i], COLOR_PAIR(14));
+                wbkgd(gpiowinlist[i], COLOR_INACTIVE);
                 wrefresh(gpiowinlist[i]);
                 i++;
-                if (i > 7) {
+                if (i >= LIST_MAX ) {
                     i = 0;
                 }
                 //gpiowinlist[i++];
                 //box(gpiowinlist[i++],v, 0);
-                wbkgd(gpiowinlist[i], COLOR_PAIR(1));
-                mvwaddstr(gpiowinlist[i], 3, 3, "wat");
+                wbkgd(gpiowinlist[i], COLOR_ACTIVE);
+                //mvwaddstr(gpiowinlist[i], 3, 3, "wat");
                 wrefresh(gpiowinlist[i]);
                 break;
             case 'd':
             case KEY_LEFT:
-                wbkgd(gpiowinlist[i], COLOR_PAIR(14));
+                wbkgd(gpiowinlist[i], COLOR_INACTIVE);
                 wrefresh(gpiowinlist[i]);
                 i--;
                 if (i < 0) {
-                    i = 7;
+                    i = LIST_MAX-1;
                 }
                 //gpiowinlist[i--];
                 //box(gpiowinlist[i--]);
-                wbkgd(gpiowinlist[i], COLOR_PAIR(1));
-                mvwaddstr(gpiowinlist[i], 3, 3, "nah");
+                wbkgd(gpiowinlist[i], COLOR_ACTIVE);
+                //mvwaddstr(gpiowinlist[i], 3, 3, "nah");
                 wrefresh(gpiowinlist[i]);
                 break;
             case KEY_UP:
-                wbkgd(gpiowinlist[i], COLOR_PAIR(14));
+                wbkgd(gpiowinlist[i], COLOR_INACTIVE);
                 wrefresh(gpiowinlist[i]);
-                if ((i > 3) && (i < 8)) {
+                if ((i > 3) && (i < LIST_MAX)) {
                     i -= 4; // i = i - 4
                 }
                 else if((i < 4) && (i >= 0)) {
@@ -141,12 +236,12 @@ int main (void) {
                 //if (i / (i+4) == 0){
                 //    i = i - 4;
                 // }
-                wbkgd(gpiowinlist[i], COLOR_PAIR(1));
+                wbkgd(gpiowinlist[i], COLOR_ACTIVE);
                 mvwaddstr(gpiowinlist[i], 3, 3, "lol");
                 wrefresh(gpiowinlist[i]);
                 break;
             case KEY_DOWN:
-                wbkgd(gpiowinlist[i], COLOR_PAIR(14));
+                wbkgd(gpiowinlist[i], COLOR_INACTIVE);
                 wrefresh(gpiowinlist[i]);
                 if ((i >=0) && (i < 4)){
                     i += 4;
@@ -154,9 +249,28 @@ int main (void) {
                 else if((i < 8) && (i > 3)){
                     i -= 4;
                 }
-                wbkgd(gpiowinlist[i], COLOR_PAIR(1));
-                mvwaddstr(gpiowinlist[i], 3, 3, "lul");
+                wbkgd(gpiowinlist[i], COLOR_ACTIVE);
+                //mvwaddstr(gpiowinlist[i], 3, 3, "lul");
                 wrefresh(gpiowinlist[i]);
+                break;
+            case 10:
+                // handle key press
+                if (gpiostate[i] == GPIO_HIGH) {
+                    // set to low
+                    mvwaddstr(gpiowinlist[i], 3, 3, "OFF");
+                    gpiostate[i] = GPIO_LOW;
+                    GPIOWrite(i, GPIO_LOW); // set pin to '0'
+                }
+                else if (gpiostate[i] == GPIO_LOW) {
+                    // set to high
+                    mvwaddstr(gpiowinlist[i], 3, 3, "ON "); // added extra space to cover up 'OFF'
+                    gpiostate[i] = GPIO_HIGH;
+                    GPIOWrite(i, GPIO_HIGH); // set pin to '1'
+                }
+                wrefresh(gpiowinlist[i]);
+                break;
+            default:
+                // always good to define "default" behavior, even if nothing
                 break;
             //clrscr();
             //case 'o':
@@ -167,14 +281,13 @@ int main (void) {
         //mvwaddstr(gpiowinlist[i], 3, 3, "wat");
         //refresh();
     }
-    delwin(gpiowinlist[0]);
-    delwin(gpiowinlist[1]);
-    delwin(gpiowinlist[2]);
-    delwin(gpiowinlist[3]);
-    delwin(gpiowinlist[4]);
-    delwin(gpiowinlist[5]);
-    delwin(gpiowinlist[6]);
-    delwin(gpiowinlist[7]);
+
+    // cleanup
+    for (i = 0; i < LIST_MAX; i++) {
+        delwin(gpiowinlist[i]);
+        GPIOUnexport(i);
+    }
+
    /* for (i = 1; i++; i < 4) {
         delwin(gpiowinlist[i]);
     }*/
