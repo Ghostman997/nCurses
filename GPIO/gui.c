@@ -15,9 +15,9 @@
 #define GPIO_HIGH 1
 
 // code stolen from http://elinux.org/RPi_GPIO_Code_Sample#sysfs
-#define VALUE_MAX 30
+#define VALUE_MAX 64
 #define BUFFER_MAX 3
-#define DIRECTION_MAX 35
+#define DIRECTION_MAX 64
 #define IN  0
 #define OUT 1
 
@@ -52,18 +52,22 @@ static int GPIOUnexport(int pin) {
 }
 
 static int GPIODirection(int pin, int dir) {
-    static const char s_directions_str[]  = "in\0out";
+    static const char s_direction_in[]  = "in";
+    static const char s_direction_out[] = "out";
     char path[DIRECTION_MAX];
     int fd;
     snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction", pin);
+    printf("writing path: %s\n", path);
     fd = open(path, O_WRONLY);
     if (-1 == fd) {
         fprintf(stderr, "Failed to open gpio direction for writing!\n");
         return(-1);
     }
-    if (-1 == write(fd, &s_directions_str[IN == dir ? 0 : 3], IN == dir ? 2 : 3)) {
-        fprintf(stderr, "Failed to set direction!\n");
-        return(-1);
+    if (dir == IN) {
+        write(fd, &s_direction_in, 2);
+    }
+    else {
+        write(fd, &s_direction_out, 3);
     }
     close(fd);
     return(0);
@@ -170,7 +174,7 @@ int main (void) {
             wborder(gpiowinlist[i], 176, 176, 176, 176, 176, 176, 176, 176);
         }
         //box(gpiowinlist[i], 0, 0);
-        snprintf(buf, sizeof(buf), "%d", i+1);
+        snprintf(buf, sizeof(buf), "%d", i);
         mvwaddstr(gpiowinlist[i], sizeh / 2, sizew / 2, buf);
         mvwaddstr(gpiowinlist[i], 1, 4, "lololololol");
         //refresh();
@@ -181,6 +185,9 @@ int main (void) {
         gpiostate[i] = GPIO_LOW;
         mvwaddstr(gpiowinlist[i], 3, 3, "OFF");
         GPIOExport(i); // create a /sys/class/gpio/gpioX entry
+        // it takes a while to create the gpioX entries so
+        // adding 10ms delay
+        usleep(100000);
         GPIODirection(i, OUT); // set pin to output
         GPIOWrite(i, GPIO_LOW); // set to '0' output
     }
@@ -237,7 +244,7 @@ int main (void) {
                 //    i = i - 4;
                 // }
                 wbkgd(gpiowinlist[i], COLOR_ACTIVE);
-                mvwaddstr(gpiowinlist[i], 3, 3, "lol");
+                //mvwaddstr(gpiowinlist[i], 3, 3, "lol");
                 wrefresh(gpiowinlist[i]);
                 break;
             case KEY_DOWN:
